@@ -1,19 +1,27 @@
 const fs = require("fs");
 const path = require("path");
+const { promisify } = require("util");
 
-const walkDir = (base, fileAction, dirAction = () => {}) => {
-  const files = fs.readdirSync(base);
+const readDir = promisify(fs.readdir);
+const fsStat = promisify(fs.stat);
 
-  files.forEach(item => {
-    let localBase = path.join(base, item);
-    let stat = fs.statSync(localBase);
+const walkDir = async (base, fileAction, dirAction = () => {}) => {
+  try {
+    const files = await readDir(base);
 
-    stat.isDirectory()
-      ? walkDir(localBase, fileAction, dirAction)
-      : fileAction(base, item);
-  });
+    files.forEach(async item => {
+      let localBase = path.join(base, item);
+      let stat = await fsStat(localBase);
 
-  dirAction(base);
+      stat.isDirectory()
+        ? walkDir(localBase, fileAction, dirAction)
+        : fileAction(base, item);
+    });
+
+    dirAction(base);
+  } catch (error) {
+    console.error(error);
+  }
 };
 
 module.exports = walkDir;

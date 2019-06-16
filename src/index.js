@@ -7,28 +7,41 @@ const config = {
   delete: argv[2] || false
 };
 
-console.log(config);
-
 exports.config = config;
 
 const walkDir = require("./modules/walkDir");
 const copyFile = require("./modules/copyFile");
+const { promisify } = require("util");
 
-if (fs.existsSync(config.output)) {
-  walkDir(
-    config.output,
-    (base, item) => fs.unlinkSync(path.join(base, item)),
-    base => fs.rmdirSync(base)
-  );
-  console.log(`Старая папка ${config.output} удалена!`);
-}
+const fsMkDir = promisify(fs.mkdir);
+const fsAccess = promisify(fs.access);
+const fsUnlink = promisify(fs.unlink);
+const fsRmDir = promisify(fs.rmdir);
 
-fs.mkdir(config.output, err => {
-  if (err) throw err;
-  console.log(`Новая папка ${config.output} создана!`);
-  walkDir(
-    config.input,
-    (base, item) => copyFile(base, item),
-    base => config.delete && fs.rmdirSync(base)
-  );
-});
+(async () => {
+  try {
+    const isOutputExists = await fsAccess(config.output);
+    if (isOutputExists) {
+      walkDir(
+        config.output,
+        async (base, item) => {
+          await fsUnlink(path.join(base, item));
+        },
+        async base => {
+          await fsRmDir(base);
+        }
+      );
+      console.log(`Старая папка ${config.output} удалена!`);
+    }
+
+    await fsMkDir(config.output);
+    console.log(`Новая папка ${config.output} создана!`);
+    walkDir(
+      config.input,
+      (base, item) => copyFile(base, item),
+      base => config.delete && fs.rmdirSync(base)
+    );
+  } catch (error) {
+    console.log(error);
+  }
+})();
